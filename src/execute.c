@@ -509,7 +509,7 @@ int handle_builtin(char** arglist) {
         printf("  NAME=value        - Set variable (no spaces around =)\n");
         printf("  NAME=\"value\"     - Set variable with spaces\n");
         printf("  echo $NAME        - Use variable in commands\n");
-        printf("  set               - Show all variables\n");
+        printf("  set               - Display all shell variables and important environment variables\n");
         printf("\n");
         printf("Advanced features:\n");
         printf("  Tab completion    - Press Tab to complete commands and filenames\n");
