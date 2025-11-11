@@ -7,11 +7,10 @@ int main() {
     rl_bind_key('\t', rl_complete);
     rl_readline_name = "myshell";
     
-    printf("Welcome to MyShell with Command Chaining and Background Jobs!\n");
+    printf("Welcome to MyShell with If-Then-Else Control Structure!\n");
     printf("Type 'help' for more information.\n\n");
 
     while (1) {
-        // NEW: Clean up completed background jobs before each prompt
         cleanup_background_jobs();
         
         cmdline = read_cmd(PROMPT, stdin);
@@ -21,7 +20,14 @@ int main() {
             break;
         }
         
-        // NEW: Handle command chaining first
+        // NEW: Handle if-then-else statements first
+        if (strncmp(cmdline, "if ", 3) == 0) {
+            handle_if_then_else(cmdline);
+            free(cmdline);
+            continue;
+        }
+        
+        // Handle command chaining
         if (strchr(cmdline, ';') != NULL) {
             handle_chain_commands(cmdline);
             free(cmdline);
