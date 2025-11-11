@@ -9,6 +9,175 @@ pid_t background_jobs[MAX_JOBS] = {0};
 char* job_commands[MAX_JOBS] = {0};
 int job_count = 0;
 
+// Global variable storage
+char* var_names[MAX_VARS] = {0};
+char* var_values[MAX_VARS] = {0};
+int var_count = 0;
+
+// Check if command is a variable assignment
+int is_variable_assignment(char** arglist) {
+    if (arglist[0] == NULL) {
+        return 0;
+    }
+    
+    char* cmd = arglist[0];
+    char* equal_sign = strchr(cmd, '=');
+    
+    // Must have = sign and it shouldn't be the first character
+    if (equal_sign == NULL || equal_sign == cmd) {
+        return 0;
+    }
+    
+    // Check that the part before = is a valid variable name
+    char* var_name = cmd;
+    int name_len = equal_sign - cmd;
+    
+    for (int i = 0; i < name_len; i++) {
+        if (!isalnum(var_name[i]) && var_name[i] != '_') {
+            return 0; // Invalid character in variable name
+        }
+    }
+    
+    // Variable name cannot start with a number
+    if (isdigit(var_name[0])) {
+        return 0;
+    }
+    
+    return 1; // Valid variable assignment
+}
+
+// Handle variable assignment
+void handle_variables(char** arglist) {
+    if (arglist[0] == NULL) return;
+    
+    char* assignment = arglist[0];
+    char* equal_sign = strchr(assignment, '=');
+    if (equal_sign == NULL) return;
+    
+    *equal_sign = '\0';
+    char* var_name = assignment;
+    char* var_value = equal_sign + 1;
+    
+    // Proper quote handling - remove surrounding quotes only
+    char* final_value;
+    if (var_value[0] == '"' && var_value[strlen(var_value)-1] == '"' && strlen(var_value) > 1) {
+        // Create a new string without the quotes
+        final_value = malloc(strlen(var_value) - 1);
+        if (final_value) {
+            strncpy(final_value, var_value + 1, strlen(var_value) - 2);
+            final_value[strlen(var_value) - 2] = '\0';
+        } else {
+            final_value = strdup(""); // Fallback if malloc fails
+        }
+    } else {
+        final_value = strdup(var_value); // Make a copy
+    }
+    
+    if (!final_value) return; // Memory allocation failed
+    
+    // Update existing or add new
+    for (int i = 0; i < var_count; i++) {
+        if (strcmp(var_names[i], var_name) == 0) {
+            free(var_values[i]);
+            var_values[i] = final_value;
+            return;
+        }
+    }
+    
+    // Add new variable
+    if (var_count < MAX_VARS) {
+        var_names[var_count] = strdup(var_name);
+        var_values[var_count] = final_value;
+        var_count++;
+    } else {
+        printf("Maximum variables reached (%d)\n", MAX_VARS);
+        free(final_value);
+    }
+}
+
+// Expand variables in arguments
+void expand_variables(char** arglist) {
+    for (int i = 0; arglist[i] != NULL; i++) {
+        char* arg = arglist[i];
+        
+        // Check if this argument starts with $ and has more characters
+        if (arg[0] == '$' && strlen(arg) > 1) {
+            char* var_name = arg + 1; // Skip the $
+            
+            // Extract clean variable name (alphanumeric and underscore only)
+            char clean_var_name[ARGLEN] = {0};
+            int j = 0;
+            while (var_name[j] != '\0' && j < ARGLEN - 1) {
+                if (isalnum(var_name[j]) || var_name[j] == '_') {
+                    clean_var_name[j] = var_name[j];
+                    j++;
+                } else {
+                    break; // Stop at first non-alphanumeric character
+                }
+            }
+            clean_var_name[j] = '\0';
+            
+            // Skip if variable name is empty
+            if (strlen(clean_var_name) == 0) {
+                continue;
+            }
+            
+            char* new_value = NULL;
+            
+            // Check environment variables first
+            char* env_value = getenv(clean_var_name);
+            if (env_value != NULL) {
+                new_value = strdup(env_value);
+            } else {
+                // Check shell variables
+                for (int k = 0; k < var_count; k++) {
+                    if (strcmp(var_names[k], clean_var_name) == 0) {
+                        new_value = strdup(var_values[k]);
+                        break;
+                    }
+                }
+            }
+            
+            // If we found a value, replace the argument
+            if (new_value != NULL) {
+                free(arglist[i]);
+                arglist[i] = new_value;
+            }
+            // If variable not found, leave it as $VAR (don't replace)
+        }
+    }
+}
+
+// Print variables
+void print_variables() {
+    if (var_count == 0) {
+        printf("No shell variables defined\n");
+    } else {
+        printf("Shell variables:\n");
+        for (int i = 0; i < var_count; i++) {
+            printf("  %s=%s\n", var_names[i], var_values[i]);
+        }
+    }
+    
+    // Also show some important environment variables
+    printf("\nEnvironment variables:\n");
+    char* important_vars[] = {"HOME", "PATH", "USER", "SHELL", "PWD", NULL};
+    for (int i = 0; important_vars[i] != NULL; i++) {
+        char* value = getenv(important_vars[i]);
+        if (value != NULL) {
+            printf("  %s=%s\n", important_vars[i], value);
+        }
+    }
+}
+
+// DEBUG: Print all variables for debugging
+void debug_print_variables() {
+    printf("DEBUG - Current variables (%d):\n", var_count);
+    for (int i = 0; i < var_count; i++) {
+        printf("  [%d] %s='%s' (len=%zu)\n", i, var_names[i], var_values[i], strlen(var_values[i]));
+    }
+}
+
 void cleanup_background_jobs() {
     int status;
     pid_t pid;
@@ -190,6 +359,9 @@ int handle_pipe(char** arglist) {
 }
 
 int execute(char* arglist[]) {
+    // Expand variables before execution
+    expand_variables(arglist);
+    
     if (handle_pipe(arglist) == 1) {
         return 0;
     }
@@ -280,6 +452,12 @@ int handle_builtin(char** arglist) {
         return 0;
     }
     
+    // Handle variable assignment
+    if (is_variable_assignment(arglist)) {
+        handle_variables(arglist);
+        return 1;
+    }
+    
     if (strcmp(arglist[0], "exit") == 0) {
         if (job_count > 0) {
             printf("Waiting for background jobs to finish...\n");
@@ -288,6 +466,12 @@ int handle_builtin(char** arglist) {
                 waitpid(background_jobs[i], &status, 0);
                 free(job_commands[i]);
             }
+        }
+        
+        // Clean up variables before exit
+        for (int i = 0; i < var_count; i++) {
+            free(var_names[i]);
+            free(var_values[i]);
         }
         
         printf("Shell exited.\n");
@@ -319,6 +503,13 @@ int handle_builtin(char** arglist) {
         printf("  help              - Display this help message\n");
         printf("  jobs              - Display background jobs\n");
         printf("  history           - Display command history\n");
+        printf("  set               - Display all variables\n");
+        printf("\n");
+        printf("Variable usage:\n");
+        printf("  NAME=value        - Set variable (no spaces around =)\n");
+        printf("  NAME=\"value\"     - Set variable with spaces\n");
+        printf("  echo $NAME        - Use variable in commands\n");
+        printf("  set               - Show all variables\n");
         printf("\n");
         printf("Advanced features:\n");
         printf("  Tab completion    - Press Tab to complete commands and filenames\n");
@@ -328,12 +519,6 @@ int handle_builtin(char** arglist) {
         printf("  Command chaining  - Use ; to run multiple commands sequentially\n");
         printf("  Background jobs   - Use & to run commands in background\n");
         printf("  If-then-else     - Use if-then-else-fi for conditional execution\n");
-        printf("                    Example: if grep 'pattern' file.txt\n");
-        printf("                    then\n");
-        printf("                      echo 'Pattern found'\n");
-        printf("                    else\n");
-        printf("                      echo 'Pattern not found'\n");
-        printf("                    fi\n");
         return 1;
     }
     
@@ -344,6 +529,13 @@ int handle_builtin(char** arglist) {
     
     else if (strcmp(arglist[0], "history") == 0) {
         print_history();
+        return 1;
+    }
+    
+    // set command to display variables
+    else if (strcmp(arglist[0], "set") == 0) {
+        print_variables();
+        // debug_print_variables(); // Uncomment for debugging
         return 1;
     }
     
