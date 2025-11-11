@@ -1,0 +1,7 @@
+total 20
+drwxrwxr-x 2 mujtaba mujtaba 4096 Nov 11 17:22 bin
+-rw-r--r-- 1 mujtaba mujtaba    0 Nov 11 17:23 file_list.txt
+drwxrwxr-x 2 mujtaba mujtaba 4096 Nov 11 17:21 include
+-rw-rw-r-- 1 mujtaba mujtaba  584 Nov 11 17:18 Makefile
+-rw-rw-r-- 1 mujtaba mujtaba  128 Nov 11 17:15 README.md
+drwxrwxr-x 2 mujtaba mujtaba 4096 Nov 11 17:22 src
