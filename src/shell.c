@@ -1,25 +1,22 @@
 #include "shell.h"
 
 char* read_cmd(char* prompt, FILE* fp) {
-    // NEW: Use readline instead of manual input reading
-    // Note: fp parameter is kept for compatibility but not used with readline
-    (void)fp; // Explicitly mark parameter as unused to avoid warning
+    (void)fp; // Mark parameter as unused
     
     char* cmdline = readline(prompt);
     
     if (cmdline == NULL) {
-        return NULL; // Handle Ctrl+D
+        return NULL;
     }
     
-    // NEW: Add non-empty commands to readline's history
     if (cmdline && *cmdline) {
-        add_history(cmdline); // Add to readline's history for up/down arrows
+        add_history(cmdline);
     }
     
     return cmdline;
 }
 
-// Keep tokenize function unchanged
+// UPDATED: Enhanced tokenize to handle redirection and pipe operators
 char** tokenize(char* cmdline) {
     if (cmdline == NULL || cmdline[0] == '\0' || cmdline[0] == '\n') {
         return NULL;
@@ -35,15 +32,48 @@ char** tokenize(char* cmdline) {
     char* start;
     int len;
     int argnum = 0;
+    int in_quotes = 0;
 
     while (*cp != '\0' && argnum < MAXARGS) {
         while (*cp == ' ' || *cp == '\t') cp++;
         
         if (*cp == '\0') break;
 
+        // Handle quoted strings
+        if (*cp == '"') {
+            in_quotes = !in_quotes;
+            cp++;
+            continue;
+        }
+
+        // Handle special operators outside quotes
+        if (!in_quotes && (*cp == '<' || *cp == '>' || *cp == '|')) {
+            arglist[argnum][0] = *cp;
+            arglist[argnum][1] = '\0';
+            argnum++;
+            cp++;
+            continue;
+        }
+
         start = cp;
         len = 1;
-        while (*++cp != '\0' && !(*cp == ' ' || *cp == '\t')) {
+        
+        // Read until special character or whitespace (unless in quotes)
+        while (*++cp != '\0') {
+            if (!in_quotes) {
+                if (*cp == ' ' || *cp == '\t' || *cp == '<' || *cp == '>' || *cp == '|') {
+                    break;
+                }
+                if (*cp == '"') {
+                    in_quotes = 1;
+                    continue;
+                }
+            } else {
+                if (*cp == '"') {
+                    in_quotes = 0;
+                    continue;
+                }
+            }
             len++;
         }
         
