@@ -17,7 +17,8 @@
 #define ARGLEN 64
 #define PROMPT "myshell> "
 #define HISTORY_SIZE 20
-#define MAX_JOBS 20              // NEW: Maximum background jobs
+#define MAX_JOBS 20
+#define MAX_BLOCK_LINES 20        // NEW: Maximum lines in if-then-else block
 
 // Function declarations
 char* read_cmd(char* prompt, FILE* fp);
@@ -35,17 +36,22 @@ int handle_redirection(char** arglist);
 int handle_pipe(char** arglist);
 int parse_redirection(char** arglist, char** input_file, char** output_file);
 
-// NEW: Command chaining and background job declarations
+// Command chaining and background job declarations
 int handle_chain_commands(char* cmdline);
 int handle_background(char** arglist);
 void cleanup_background_jobs();
 void print_jobs();
 
+// NEW: If-then-else-fi control structure declarations
+int handle_if_then_else(char* cmdline);
+char* read_multiline_block(const char* prompt);
+int execute_command_block(char** commands, int count);
+
 // External declaration of history array
 extern char* history[HISTORY_SIZE];
 extern int history_count;
 
-// NEW: External declarations for job control
+// External declarations for job control
 extern pid_t background_jobs[MAX_JOBS];
 extern int job_count;
 extern char* job_commands[MAX_JOBS];

@@ -4,26 +4,22 @@
 char* history[HISTORY_SIZE] = {0};
 int history_count = 0;
 
-// NEW: Global job control variables
+// Global job control variables
 pid_t background_jobs[MAX_JOBS] = {0};
 char* job_commands[MAX_JOBS] = {0};
 int job_count = 0;
 
-// NEW: Clean up completed background jobs
 void cleanup_background_jobs() {
     int status;
     pid_t pid;
     
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        // Find and remove the completed job
         for (int i = 0; i < job_count; i++) {
             if (background_jobs[i] == pid) {
                 printf("[%d] Done    %d %s\n", i+1, pid, job_commands[i]);
                 
-                // Free job command memory
                 free(job_commands[i]);
                 
-                // Shift jobs array
                 for (int j = i; j < job_count - 1; j++) {
                     background_jobs[j] = background_jobs[j+1];
                     job_commands[j] = job_commands[j+1];
@@ -37,7 +33,6 @@ void cleanup_background_jobs() {
     }
 }
 
-// NEW: Print current background jobs
 void print_jobs() {
     if (job_count == 0) {
         printf("No background jobs\n");
@@ -45,25 +40,19 @@ void print_jobs() {
     }
     
     for (int i = 0; i < job_count; i++) {
-        // Check if job is still running
         int status;
         pid_t result = waitpid(background_jobs[i], &status, WNOHANG);
         if (result == 0) {
-            // Job is still running
             printf("[%d] Running %d %s\n", i+1, background_jobs[i], job_commands[i]);
         } else if (result > 0) {
-            // Job has completed but not yet cleaned up
             printf("[%d] Done    %d %s\n", i+1, background_jobs[i], job_commands[i]);
         } else {
-            // Error case
             printf("[%d] Unknown %d %s\n", i+1, background_jobs[i], job_commands[i]);
         }
     }
 }
 
-// NEW: Handle background execution
 int handle_background(char** arglist) {
-    // Check if last argument is &
     int background = 0;
     int last_index = 0;
     
@@ -73,7 +62,7 @@ int handle_background(char** arglist) {
     
     if (last_index >= 0 && strcmp(arglist[last_index], "&") == 0) {
         background = 1;
-        arglist[last_index] = NULL; // Remove & from arguments
+        arglist[last_index] = NULL;
     }
     
     return background;
@@ -201,12 +190,10 @@ int handle_pipe(char** arglist) {
 }
 
 int execute(char* arglist[]) {
-    // Check for pipes first
     if (handle_pipe(arglist) == 1) {
         return 0;
     }
     
-    // NEW: Check for background execution
     int background = handle_background(arglist);
     
     int status;
@@ -225,11 +212,9 @@ int execute(char* arglist[]) {
             exit(1);
         default: // Parent process
             if (background) {
-                // NEW: Store background job
                 if (job_count < MAX_JOBS) {
                     background_jobs[job_count] = cpid;
                     
-                    // Store command string for display
                     char cmd_buf[MAX_LEN] = "";
                     for (int i = 0; arglist[i] != NULL && i < 10; i++) {
                         if (i > 0) strcat(cmd_buf, " ");
@@ -241,7 +226,7 @@ int execute(char* arglist[]) {
                     job_count++;
                 } else {
                     printf("Maximum background jobs reached (%d)\n", MAX_JOBS);
-                    waitpid(cpid, &status, 0); // Wait anyway if no space
+                    waitpid(cpid, &status, 0);
                 }
             } else {
                 waitpid(cpid, &status, 0);
@@ -296,7 +281,6 @@ int handle_builtin(char** arglist) {
     }
     
     if (strcmp(arglist[0], "exit") == 0) {
-        // NEW: Wait for all background jobs before exiting
         if (job_count > 0) {
             printf("Waiting for background jobs to finish...\n");
             for (int i = 0; i < job_count; i++) {
@@ -333,7 +317,7 @@ int handle_builtin(char** arglist) {
         printf("  cd <directory>    - Change current working directory\n");
         printf("  exit              - Exit the shell\n");
         printf("  help              - Display this help message\n");
-        printf("  jobs              - Display background jobs\n");  // UPDATED
+        printf("  jobs              - Display background jobs\n");
         printf("  history           - Display command history\n");
         printf("\n");
         printf("Advanced features:\n");
@@ -343,10 +327,16 @@ int handle_builtin(char** arglist) {
         printf("  Pipes             - Use | to connect commands (e.g., cmd1 | cmd2)\n");
         printf("  Command chaining  - Use ; to run multiple commands sequentially\n");
         printf("  Background jobs   - Use & to run commands in background\n");
+        printf("  If-then-else     - Use if-then-else-fi for conditional execution\n");
+        printf("                    Example: if grep 'pattern' file.txt\n");
+        printf("                    then\n");
+        printf("                      echo 'Pattern found'\n");
+        printf("                    else\n");
+        printf("                      echo 'Pattern not found'\n");
+        printf("                    fi\n");
         return 1;
     }
     
-    // UPDATED: jobs command now shows actual background jobs
     else if (strcmp(arglist[0], "jobs") == 0) {
         print_jobs();
         return 1;
