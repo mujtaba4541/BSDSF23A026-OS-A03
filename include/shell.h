@@ -11,11 +11,21 @@
 #define MAXARGS 64
 #define ARGLEN 64
 #define PROMPT "myshell> "
+#define HISTORY_SIZE 20
 
 // Function declarations
 char* read_cmd(char* prompt, FILE* fp);
 char** tokenize(char* cmdline);
 int execute(char* arglist[]);
-int handle_builtin(char** arglist);  // NEW: Built-in command handler
+int handle_builtin(char** arglist);
+
+// NEW: History function declarations
+void add_to_history(const char* cmdline);
+void print_history();
+int execute_from_history(int n);
+
+// NEW: External declaration of history array
+extern char* history[HISTORY_SIZE];
+extern int history_count;
 
 #endif
