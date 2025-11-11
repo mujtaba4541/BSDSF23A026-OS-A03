@@ -6,7 +6,11 @@ int main() {
 
     while ((cmdline = read_cmd(PROMPT, stdin)) != NULL) {
         if ((arglist = tokenize(cmdline)) != NULL) {
-            execute(arglist);
+            // NEW: Check if it's a built-in command before executing
+            if (!handle_builtin(arglist)) {
+                // If not built-in, execute as external command
+                execute(arglist);
+            }
 
             // Free the memory allocated by tokenize()
             for (int i = 0; arglist[i] != NULL; i++) {
