@@ -500,7 +500,7 @@ int handle_builtin(char** arglist) {
         printf("Built-in commands:\n");
         printf("  cd <directory>    - Change current working directory\n");
         printf("  exit              - Exit the shell\n");
-        printf("  help              - Display this help message\n");
+        printf("  help              - Display all shell variables and important environment variables\n");
         printf("  jobs              - Display background jobs\n");
         printf("  history           - Display command history\n");
         printf("  set               - Display all variables\n");
