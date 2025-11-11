@@ -4,17 +4,16 @@ int main() {
     char* cmdline;
     char** arglist;
 
-    // NEW: Configure readline for better user experience
-    rl_bind_key('\t', rl_complete); // Enable tab completion
+    rl_bind_key('\t', rl_complete);
+    rl_readline_name = "myshell";
     
-    // Optional: Set readline behavior
-    rl_readline_name = "myshell"; // Name for conditional parsing in .inputrc
-    
-    printf("Welcome to MyShell with Readline support!\n");
-    printf("Features: Tab completion, History navigation with Up/Down arrows\n");
+    printf("Welcome to MyShell with Command Chaining and Background Jobs!\n");
     printf("Type 'help' for more information.\n\n");
 
     while (1) {
+        // NEW: Clean up completed background jobs before each prompt
+        cleanup_background_jobs();
+        
         cmdline = read_cmd(PROMPT, stdin);
         
         if (cmdline == NULL) {
@@ -22,7 +21,13 @@ int main() {
             break;
         }
         
-        // Handle history re-execution (!n command)
+        // NEW: Handle command chaining first
+        if (strchr(cmdline, ';') != NULL) {
+            handle_chain_commands(cmdline);
+            free(cmdline);
+            continue;
+        }
+        
         if (cmdline[0] == '!') {
             int hist_num;
             if (sscanf(cmdline + 1, "%d", &hist_num) == 1) {
@@ -42,7 +47,6 @@ int main() {
             }
         }
         
-        // Add to our internal history (except history commands themselves)
         if (strlen(cmdline) > 0 && cmdline[0] != '!') {
             add_to_history(cmdline);
         }
@@ -52,7 +56,6 @@ int main() {
                 execute(arglist);
             }
 
-            // Free the memory allocated by tokenize()
             for (int i = 0; arglist[i] != NULL; i++) {
                 free(arglist[i]);
             }
