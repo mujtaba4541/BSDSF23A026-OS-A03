@@ -6,8 +6,11 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <readline/readline.h>    // NEW: Readline headers
-#include <readline/history.h>     // NEW: History headers
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>              // NEW: For file operations
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define MAX_LEN 1024
 #define MAXARGS 64
@@ -25,6 +28,11 @@ int handle_builtin(char** arglist);
 void add_to_history(const char* cmdline);
 void print_history();
 int execute_from_history(int n);
+
+// NEW: Redirection and pipe function declarations
+int handle_redirection(char** arglist);
+int handle_pipe(char** arglist);
+int parse_redirection(char** arglist, char** input_file, char** output_file);
 
 // External declaration of history array
 extern char* history[HISTORY_SIZE];

@@ -4,7 +4,146 @@
 char* history[HISTORY_SIZE] = {0};
 int history_count = 0;
 
+// NEW: Parse redirection operators and extract filenames
+int parse_redirection(char** arglist, char** input_file, char** output_file) {
+    *input_file = NULL;
+    *output_file = NULL;
+    
+    for (int i = 0; arglist[i] != NULL; i++) {
+        if (strcmp(arglist[i], "<") == 0) {
+            *input_file = arglist[i+1];
+            arglist[i] = NULL; // Remove < from arguments
+            if (arglist[i+1]) arglist[i+1] = NULL; // Remove filename from arguments
+        }
+        else if (strcmp(arglist[i], ">") == 0) {
+            *output_file = arglist[i+1];
+            arglist[i] = NULL; // Remove > from arguments
+            if (arglist[i+1]) arglist[i+1] = NULL; // Remove filename from arguments
+        }
+    }
+    return 0;
+}
+
+// NEW: Handle I/O redirection
+int handle_redirection(char** arglist) {
+    char* input_file = NULL;
+    char* output_file = NULL;
+    
+    parse_redirection(arglist, &input_file, &output_file);
+    
+    // Handle input redirection
+    if (input_file != NULL) {
+        int fd = open(input_file, O_RDONLY);
+        if (fd == -1) {
+            perror("Input redirection failed");
+            return -1;
+        }
+        if (dup2(fd, STDIN_FILENO) == -1) {
+            perror("dup2 input failed");
+            close(fd);
+            return -1;
+        }
+        close(fd);
+    }
+    
+    // Handle output redirection
+    if (output_file != NULL) {
+        int fd = open(output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        if (fd == -1) {
+            perror("Output redirection failed");
+            return -1;
+        }
+        if (dup2(fd, STDOUT_FILENO) == -1) {
+            perror("dup2 output failed");
+            close(fd);
+            return -1;
+        }
+        close(fd);
+    }
+    
+    return 0;
+}
+
+// NEW: Handle pipe between commands
+int handle_pipe(char** arglist) {
+    int pipe_pos = -1;
+    
+    // Find pipe position
+    for (int i = 0; arglist[i] != NULL; i++) {
+        if (strcmp(arglist[i], "|") == 0) {
+            pipe_pos = i;
+            break;
+        }
+    }
+    
+    if (pipe_pos == -1) {
+        return 0; // No pipe found
+    }
+    
+    // Split commands at pipe
+    arglist[pipe_pos] = NULL;
+    char** left_cmd = arglist;
+    char** right_cmd = &arglist[pipe_pos + 1];
+    
+    if (right_cmd[0] == NULL) {
+        fprintf(stderr, "Syntax error: no command after pipe\n");
+        return -1;
+    }
+    
+    int pipefd[2];
+    if (pipe(pipefd) == -1) {
+        perror("pipe failed");
+        return -1;
+    }
+    
+    pid_t left_pid = fork();
+    if (left_pid == 0) {
+        // Left child process (writer)
+        close(pipefd[0]); // Close read end
+        dup2(pipefd[1], STDOUT_FILENO); // Connect stdout to pipe write
+        close(pipefd[1]);
+        
+        // Handle redirection for left command
+        handle_redirection(left_cmd);
+        
+        execvp(left_cmd[0], left_cmd);
+        perror("Left command failed");
+        exit(1);
+    }
+    
+    pid_t right_pid = fork();
+    if (right_pid == 0) {
+        // Right child process (reader)
+        close(pipefd[1]); // Close write end
+        dup2(pipefd[0], STDIN_FILENO); // Connect stdin to pipe read
+        close(pipefd[0]);
+        
+        // Handle redirection for right command
+        handle_redirection(right_cmd);
+        
+        execvp(right_cmd[0], right_cmd);
+        perror("Right command failed");
+        exit(1);
+    }
+    
+    // Parent process
+    close(pipefd[0]);
+    close(pipefd[1]);
+    
+    // Wait for both children
+    int status;
+    waitpid(left_pid, &status, 0);
+    waitpid(right_pid, &status, 0);
+    
+    return 1; // Indicate pipe was handled
+}
+
 int execute(char* arglist[]) {
+    // NEW: Check for pipes first
+    if (handle_pipe(arglist) == 1) {
+        return 0; // Pipe was handled, no need for normal execution
+    }
+    
     int status;
     int cpid = fork();
 
@@ -13,6 +152,10 @@ int execute(char* arglist[]) {
             perror("fork failed");
             exit(1);
         case 0: // Child process
+            // NEW: Handle redirection before exec
+            if (handle_redirection(arglist) == -1) {
+                exit(1);
+            }
             execvp(arglist[0], arglist);
             perror("Command not found");
             exit(1);
@@ -23,12 +166,10 @@ int execute(char* arglist[]) {
 }
 
 void add_to_history(const char* cmdline) {
-    // Skip empty commands and history commands
     if (cmdline == NULL || strlen(cmdline) == 0 || cmdline[0] == '!') {
         return;
     }
     
-    // Don't add duplicate consecutive commands
     if (history_count > 0 && strcmp(history[history_count-1], cmdline) == 0) {
         return;
     }
@@ -37,7 +178,6 @@ void add_to_history(const char* cmdline) {
         history[history_count] = strdup(cmdline);
         history_count++;
     } else {
-        // Shift history when full (FIFO)
         free(history[0]);
         for (int i = 1; i < HISTORY_SIZE; i++) {
             history[i-1] = history[i];
@@ -45,14 +185,12 @@ void add_to_history(const char* cmdline) {
         history[HISTORY_SIZE-1] = strdup(cmdline);
     }
     
-    // NEW: Also add to readline's internal history for better integration
     if (cmdline && *cmdline) {
         add_history(cmdline);
     }
 }
 
 void print_history() {
-    // NEW: Print both our history and readline's history for consistency
     printf("Shell command history:\n");
     for (int i = 0; i < history_count; i++) {
         printf("%d %s\n", i+1, history[i]);
@@ -74,8 +212,6 @@ int handle_builtin(char** arglist) {
     
     if (strcmp(arglist[0], "exit") == 0) {
         printf("Shell exited.\n");
-        
-        // NEW: Clean up readline history before exit
         rl_clear_history();
         exit(0);
         return 1;
@@ -108,6 +244,8 @@ int handle_builtin(char** arglist) {
         printf("Advanced features:\n");
         printf("  Tab completion    - Press Tab to complete commands and filenames\n");
         printf("  History navigation - Use Up/Down arrows to browse command history\n");
+        printf("  I/O Redirection   - Use < for input, > for output redirection\n");
+        printf("  Pipes             - Use | to connect commands (e.g., cmd1 | cmd2)\n");
         return 1;
     }
     
