@@ -1,6 +1,6 @@
 #include "shell.h"
 
-// NEW: Global history variables (now accessible from other files)
+// Global history variables
 char* history[HISTORY_SIZE] = {0};
 int history_count = 0;
 
@@ -22,7 +22,6 @@ int execute(char* arglist[]) {
     }
 }
 
-// NEW: Add command to history
 void add_to_history(const char* cmdline) {
     // Skip empty commands and history commands
     if (cmdline == NULL || strlen(cmdline) == 0 || cmdline[0] == '!') {
@@ -45,22 +44,27 @@ void add_to_history(const char* cmdline) {
         }
         history[HISTORY_SIZE-1] = strdup(cmdline);
     }
+    
+    // NEW: Also add to readline's internal history for better integration
+    if (cmdline && *cmdline) {
+        add_history(cmdline);
+    }
 }
 
-// NEW: Print command history
 void print_history() {
+    // NEW: Print both our history and readline's history for consistency
+    printf("Shell command history:\n");
     for (int i = 0; i < history_count; i++) {
         printf("%d %s\n", i+1, history[i]);
     }
 }
 
-// NEW: Execute command from history by number
 int execute_from_history(int n) {
     if (n < 1 || n > history_count) {
         printf("No such command in history\n");
         return -1;
     }
-    return n-1; // Return index in history array
+    return n-1;
 }
 
 int handle_builtin(char** arglist) {
@@ -68,14 +72,15 @@ int handle_builtin(char** arglist) {
         return 0;
     }
     
-    // exit command
     if (strcmp(arglist[0], "exit") == 0) {
         printf("Shell exited.\n");
+        
+        // NEW: Clean up readline history before exit
+        rl_clear_history();
         exit(0);
         return 1;
     }
     
-    // cd command
     else if (strcmp(arglist[0], "cd") == 0) {
         char* path = arglist[1];
         if (path == NULL) {
@@ -92,7 +97,6 @@ int handle_builtin(char** arglist) {
         return 1;
     }
     
-    // help command
     else if (strcmp(arglist[0], "help") == 0) {
         printf("Built-in commands:\n");
         printf("  cd <directory>    - Change current working directory\n");
@@ -100,16 +104,18 @@ int handle_builtin(char** arglist) {
         printf("  help              - Display this help message\n");
         printf("  jobs              - Display background jobs (not implemented yet)\n");
         printf("  history           - Display command history\n");
+        printf("\n");
+        printf("Advanced features:\n");
+        printf("  Tab completion    - Press Tab to complete commands and filenames\n");
+        printf("  History navigation - Use Up/Down arrows to browse command history\n");
         return 1;
     }
     
-    // jobs command
     else if (strcmp(arglist[0], "jobs") == 0) {
         printf("Job control not yet implemented.\n");
         return 1;
     }
     
-    // NEW: history command
     else if (strcmp(arglist[0], "history") == 0) {
         print_history();
         return 1;

@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <readline/readline.h>    // NEW: Readline headers
+#include <readline/history.h>     // NEW: History headers
 
 #define MAX_LEN 1024
 #define MAXARGS 64
@@ -19,12 +21,12 @@ char** tokenize(char* cmdline);
 int execute(char* arglist[]);
 int handle_builtin(char** arglist);
 
-// NEW: History function declarations
+// History function declarations
 void add_to_history(const char* cmdline);
 void print_history();
 int execute_from_history(int n);
 
-// NEW: External declaration of history array
+// External declaration of history array
 extern char* history[HISTORY_SIZE];
 extern int history_count;
 
