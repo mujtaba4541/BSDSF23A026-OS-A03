@@ -1,5 +1,9 @@
 #include "shell.h"
 
+// NEW: Global history variables (now accessible from other files)
+char* history[HISTORY_SIZE] = {0};
+int history_count = 0;
+
 int execute(char* arglist[]) {
     int status;
     int cpid = fork();
@@ -18,10 +22,50 @@ int execute(char* arglist[]) {
     }
 }
 
-// NEW: Built-in command handler
+// NEW: Add command to history
+void add_to_history(const char* cmdline) {
+    // Skip empty commands and history commands
+    if (cmdline == NULL || strlen(cmdline) == 0 || cmdline[0] == '!') {
+        return;
+    }
+    
+    // Don't add duplicate consecutive commands
+    if (history_count > 0 && strcmp(history[history_count-1], cmdline) == 0) {
+        return;
+    }
+    
+    if (history_count < HISTORY_SIZE) {
+        history[history_count] = strdup(cmdline);
+        history_count++;
+    } else {
+        // Shift history when full (FIFO)
+        free(history[0]);
+        for (int i = 1; i < HISTORY_SIZE; i++) {
+            history[i-1] = history[i];
+        }
+        history[HISTORY_SIZE-1] = strdup(cmdline);
+    }
+}
+
+// NEW: Print command history
+void print_history() {
+    for (int i = 0; i < history_count; i++) {
+        printf("%d %s\n", i+1, history[i]);
+    }
+}
+
+// NEW: Execute command from history by number
+int execute_from_history(int n) {
+    if (n < 1 || n > history_count) {
+        printf("No such command in history\n");
+        return -1;
+    }
+    return n-1; // Return index in history array
+}
+
 int handle_builtin(char** arglist) {
     if (arglist[0] == NULL) {
-        return 0; // Not a built-in command
+        return 0;
     }
     
     // exit command
@@ -35,7 +79,6 @@ int handle_builtin(char** arglist) {
     else if (strcmp(arglist[0], "cd") == 0) {
         char* path = arglist[1];
         if (path == NULL) {
-            // If no argument, go to home directory
             path = getenv("HOME");
             if (path == NULL) {
                 fprintf(stderr, "cd: HOME environment variable not set\n");
@@ -56,14 +99,21 @@ int handle_builtin(char** arglist) {
         printf("  exit              - Exit the shell\n");
         printf("  help              - Display this help message\n");
         printf("  jobs              - Display background jobs (not implemented yet)\n");
+        printf("  history           - Display command history\n");
         return 1;
     }
     
-    // jobs command (placeholder)
+    // jobs command
     else if (strcmp(arglist[0], "jobs") == 0) {
         printf("Job control not yet implemented.\n");
         return 1;
     }
     
-    return 0; // Not a built-in command
+    // NEW: history command
+    else if (strcmp(arglist[0], "history") == 0) {
+        print_history();
+        return 1;
+    }
+    
+    return 0;
 }
