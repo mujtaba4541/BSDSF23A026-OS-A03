@@ -46,6 +46,8 @@ char** tokenize(char* cmdline) {
         while (*++cp != '\0' && !(*cp == ' ' || *cp == '\t')) {
             len++;
         }
+        
+        // FIXED: Corrected this line - removed extra [arglist[argnum]]
         strncpy(arglist[argnum], start, len);
         arglist[argnum][len] = '\0';
         argnum++;
